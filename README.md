@@ -18,8 +18,7 @@ datasets.
 
 ```
 .
-├── main.tex                     LaTeX source of the writeup
-├── main.pdf                     Compiled writeup (problem formulations + Q2b/Q3 discussion)
+├── write_up.pdf                     Compiled writeup (problem formulations + Q2b/Q3 discussion)
 ├── solvers.py                   Canonical implementations of all three formulations
 ├── main_3(a).py                 Driver: runs all three formulations on Dataset 1 (120s limit)
 ├── main_3(b).py                 Driver: runs Formulations 1a and 1b on Dataset 2 (600s limit)
@@ -95,7 +94,7 @@ Raw outputs that back the two tables in the writeup. One row per (instance,
 formulation) pair, columns: `instance`, `formulation`, `is_optimal`, `obj_val`,
 `lp_relaxation`, `node_count`, `solve_time`.
 
-### `main.tex`, `main.pdf`
+### `write_up.pdf`
 The writeup. Contains the three problem formulations (Sections 1 and 2), the
 set-covering vs.\ set-partitioning discussion (Section 4), and the computational
 experiments and analysis on both datasets (Section 5).
