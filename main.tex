@@ -1,0 +1,376 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{ORIE 5135 Project}
+\author{Peter Ye}
+\date{May 2026}
+
+\begin{document}
+\maketitle
+
+\section{Question 1a: Natural ILP Formulation}
+
+\textbf{Sets and Parameters:}
+\begin{itemize}
+    \item Set of exams: $V = \{1, 2, \dots, m\}$
+    \item Set of available time slots: $T = \{1, 2, \dots, n\}$
+    \item Number of proctors required by exam $i$: $r_i$
+    \item Maximum proctor capacity per time slot: $R$
+    \item Conflict edge set: $(i, i') \in E$ indicates exams $i$ and $i'$ share at least one student
+\end{itemize}
+
+\textbf{Decision Variables:}
+\begin{itemize}
+    \item $x_{ij} \in \{0,1\}$: equals 1 if exam $i$ is assigned to time slot $j$, 0 otherwise
+    \item $y_j \in \{0,1\}$: equals 1 if time slot $j$ is used, 0 otherwise
+\end{itemize}
+
+\textbf{Model:}
+\begin{align}
+\min \quad & z = \sum_{j \in T} y_j \\
+\text{s.t.} \quad & \sum_{j \in T} x_{ij} = 1, \quad \forall\, i \in V \\
+& \sum_{i \in V} r_i\, x_{ij} \leq R\, y_j, \quad \forall\, j \in T \\
+& x_{ij} + x_{i'j} \leq y_j, \quad \forall\, (i,i') \in E,\; \forall\, j \in T \\
+& y_j \geq y_{j+1}, \quad \forall\, j = 1, \dots, n-1 \\
+& x_{ij},\, y_j \in \{0,1\}, \quad \forall\, i \in V,\; j \in T
+\end{align}
+
+The last constraint is a symmetry-breaking inequality. Since the time slots are
+interchangeable, any feasible schedule can be relabeled so that used slots come
+before unused ones; this constraint enforces that canonical labeling, removing a
+large amount of solution symmetry without changing the optimal objective value.
+
+\section{Question 1b: Clique-Strengthened ILP Formulation}
+
+The sets, parameters, decision variables, and all other constraints (including the
+symmetry-breaking inequality) remain the same as in Formulation 1a. The pairwise
+conflict constraints are replaced by clique inequalities.
+
+Let $\mathcal{L}$ denote the set of all maximal cliques in the conflict graph $G$.
+
+\textbf{Clique Inequality:}
+\[
+\sum_{i \in C} x_{ij} \leq y_j, \quad \forall\, C \in \mathcal{L},\; \forall\, j \in T
+\]
+
+\textbf{Validity and dominance.} Any two exams in a clique $C$ pairwise share at least
+one student, so at most one exam from $C$ can be assigned to time slot $j$; if any
+exam in $C$ is in slot $j$ then that slot is used, which gives $y_j = 1$. Hence
+$\sum_{i \in C} x_{ij} \leq y_j$. Each such clique inequality dominates the
+$\binom{|C|}{2}$ pairwise edge inequalities $x_{ij} + x_{i'j} \leq y_j$ for
+$i, i' \in C$: summing the pairwise inequalities only yields
+$\sum_{i \in C} x_{ij} \leq \tfrac{|C|}{2}\, y_j$, a strictly weaker bound for
+$|C| \geq 3$. Replacing pairwise edge constraints with clique inequalities therefore
+gives an LP relaxation that is at least as tight, and strictly tighter whenever the
+LP solution would otherwise place fractional mass on three or more vertices of a
+clique inside the same slot.
+
+\section{Question 2a: Extended Formulation}
+
+Let $\varphi$ denote the collection of all feasible groupings. A subset $S \subseteq \{1, 2, \dots, m\}$ belongs to $\varphi$ if and only if:
+\begin{enumerate}
+    \item \textbf{Independent set:} No two exams in $S$ share a student (i.e., $S$ is a stable set in $G$).
+    \item \textbf{Capacity:} $\displaystyle\sum_{i \in S} r_i \leq R$.
+\end{enumerate}
+
+\textbf{Decision Variable:}
+\begin{itemize}
+    \item $\lambda_S \in \{0,1\}$: equals 1 if grouping $S$ is selected, 0 otherwise
+\end{itemize}
+
+\textbf{Model:}
+\begin{align}
+\min \quad & z = \sum_{S \in \varphi} \lambda_S \\
+\text{s.t.} \quad & \sum_{\substack{S \in \varphi \\ i \in S}} \lambda_S = 1, \quad \forall\, i \in \{1, 2, \dots, m\} \\
+& \lambda_S \in \{0,1\}, \quad \forall\, S \in \varphi
+\end{align}
+
+This is a set-partitioning model with one variable per feasible grouping, which is
+exactly what we implement and use as the baseline in Question 3. We assume that the
+number of available time slots $n$ is large enough to accommodate the optimal
+schedule, so no explicit upper bound on the number of selected groupings is needed
+(this holds for every instance in the two datasets, where $n = m$).
+
+\section{Question 2b: Set Covering vs.\ Set Partitioning}
+
+In the set partitioning formulation (used in Question 2a), each exam must belong to
+\emph{exactly one} selected grouping ($= 1$). This requires enumerating \emph{all}
+feasible groupings, including non-maximal ones, because restricting to only maximal
+groupings may make it impossible to partition the exams such that each appears in
+exactly one group.
+
+An alternative is the set covering formulation, where each exam must belong to
+\emph{at least one} selected grouping ($\geq 1$). Since the objective minimizes the
+number of selected groupings, no optimal solution will redundantly cover an exam
+in multiple groupings.
+
+The set covering formulation allows us to restrict the variables to only
+\textbf{maximal} feasible groupings --- groupings to which no additional exam can be
+added without violating either the proctor capacity or a conflict constraint. This
+significantly reduces the number of variables.
+
+Despite this difference, the two formulations are equivalent: any solution of the
+set partitioning model can be converted to a solution of the set covering model with
+the same objective value (by expanding each non-maximal grouping to a maximal one),
+and any solution of the set covering model can be converted back to a set
+partitioning solution with the same value, by shrinking each maximal grouping to a
+subset that ensures every exam is contained in exactly one of them. Their LP
+relaxation values also coincide.
+
+In practice, the set covering formulation with maximal groupings is preferable because:
+\begin{enumerate}
+    \item The number of variables is smaller (though still exponential in the worst case).
+    \item The LP relaxation values are identical.
+    \item LPs with inequality constraints ($\geq$) are generally easier for solvers
+          than LPs with equality constraints ($=$).
+\end{enumerate}
+
+The set covering formulation replaces the equality constraints with inequalities:
+
+\begin{align}
+\min \quad & z = \sum_{S \in \mathcal{S}} \lambda_S \\
+\text{s.t.} \quad & \sum_{\substack{S \in \mathcal{S} \\ i \in S}} \lambda_S \geq 1, \quad \forall\, i \in \{1, 2, \dots, m\} \\
+& \lambda_S \in \{0,1\}, \quad \forall\, S \in \mathcal{S}
+\end{align}
+
+where $\mathcal{S}$ denotes the collection of all \textbf{maximal} feasible groupings. A feasible grouping $S$ is maximal if no additional exam can be added to $S$ without violating either the proctor capacity constraint or the independence requirement.
+
+We did not implement the set covering version, but compared with set partitioning we
+would expect it to be faster on both ends of the pipeline. Enumeration would produce
+fewer columns, since only maximal groupings need to be stored rather than every
+smaller subset visited along the way. Each LP solve would also be slightly cheaper,
+because there are fewer variables and inequality constraints are usually easier for
+the solver to handle than equalities. The root LP value stays the same, so the bound
+quality is unchanged.
+
+\section{Question 3: Computational Experiments}
+
+All experiments were run with Gurobi (via \texttt{gurobipy}) on a single machine. The
+implementation reads each instance directly from its JSON file and builds the three
+formulations described in Sections 1 and 2. For every formulation, we record (i) the LP
+relaxation value at the root, (ii) the number of branch-and-bound nodes explored, and
+(iii) the wall-clock solve time --- as reported by Gurobi for Formulations 1a and 1b,
+and as total wall time including the enumeration of feasible groupings for
+Formulation~2. Each instance has $m = n$ and $R = 25$, with conflict-graph density
+close to $0.5$.
+
+\subsection{Question 3(a): Dataset 1 (time limit 120\,s)}
+
+Dataset 1 contains ten instances of growing size, ranging from $m = 35$
+($\lvert E \rvert = 292$) to $m = 75$ ($\lvert E \rvert \approx 1400$). Table~\ref{tab:ds1}
+reports the results for the three formulations on every instance.
+
+\begin{table}[h]
+\centering
+\footnotesize
+\caption{Dataset 1 results. ``Opt?'' indicates whether Gurobi proved optimality within the
+120\,s time limit. ``LP'' is the value of the LP relaxation at the root.
+For Formulation~2, ``Time'' includes the time spent enumerating feasible groupings.}
+\label{tab:ds1}
+\begin{tabular}{llrrrrcrr}
+\toprule
+Instance & ($m$, $\lvert E\rvert$) & Form. & LP & Obj. & Opt? & Nodes & Time (s) \\
+\midrule
+\multirow{3}{*}{01} & \multirow{3}{*}{(35, 292)}
+   & 1a Natural  &  6.32 &  8 & Y & 1 &   1.20 \\
+ & & 1b Clique   &  6.32 &  8 & Y & 1 &   2.35 \\
+ & & 2 Extended  &  7.18 &  8 & Y & 1 &   0.04 \\
+\midrule
+\multirow{3}{*}{02} & \multirow{3}{*}{(38, 345)}
+   & 1a Natural  &  7.32 &  9 & Y &  943 &   1.89 \\
+ & & 1b Clique   &  7.32 &  9 & Y &  791 &   7.94 \\
+ & & 2 Extended  &  7.92 &  9 & Y &    1 &   0.08 \\
+\midrule
+\multirow{3}{*}{03} & \multirow{3}{*}{(40, 369)}
+   & 1a Natural  &  7.88 &  9 & Y &  209 &   2.69 \\
+ & & 1b Clique   &  7.88 &  9 & Y &  153 &   3.24 \\
+ & & 2 Extended  &  8.12 &  9 & Y &    1 &   0.10 \\
+\midrule
+\multirow{3}{*}{04} & \multirow{3}{*}{(60, 886)}
+   & 1a Natural  & 12.84 & 13 & Y & 207\,271 &  99.36 \\
+ & & 1b Clique   & 12.84 & 13 & N & 9\,104   & 120.05 \\
+ & & 2 Extended  & 12.84 & 13 & Y & 1        &   0.61 \\
+\midrule
+\multirow{3}{*}{05} & \multirow{3}{*}{(63, 947)}
+   & 1a Natural  & 12.40 & 13 & Y & 1 &  10.89 \\
+ & & 1b Clique   & 12.40 & 13 & Y & 1 &  37.28 \\
+ & & 2 Extended  & 12.40 & 13 & Y & 1 &   0.58 \\
+\midrule
+\multirow{3}{*}{06} & \multirow{3}{*}{(65, 1057)}
+   & 1a Natural  & 12.88 & 14 & N & 32\,091 & 120.04 \\
+ & & 1b Clique   & 12.88 & 14 & N & 3\,781  & 120.03 \\
+ & & 2 Extended  & 12.88 & 13 & Y & 413     &   2.44 \\
+\midrule
+\multirow{3}{*}{07} & \multirow{3}{*}{(68, 1109)}
+   & 1a Natural  & 12.68 & 13 & Y & 6\,516 &  21.26 \\
+ & & 1b Clique   & 12.68 & 13 & Y & 1\,524 & 101.51 \\
+ & & 2 Extended  & 12.68 & 13 & Y & 1      &   1.76 \\
+\midrule
+\multirow{3}{*}{08} & \multirow{3}{*}{(75, 1380)}
+   & 1a Natural  & 15.36 & 16 & Y & 1 &  20.02 \\
+ & & 1b Clique   & 15.36 & 16 & Y & 1 & 115.48 \\
+ & & 2 Extended  & 15.36 & 16 & Y & 1 &   0.77 \\
+\midrule
+\multirow{3}{*}{09} & \multirow{3}{*}{(75, 1372)}
+   & 1a Natural  & 14.16 & 15 & Y & 1 &  15.44 \\
+ & & 1b Clique   & 14.16 & 75 & N & 1 & 120.02 \\
+ & & 2 Extended  & 14.16 & 15 & Y & 1 &   1.13 \\
+\midrule
+\multirow{3}{*}{10} & \multirow{3}{*}{(75, 1423)}
+   & 1a Natural  & 14.68 & 16 & N & 29\,094 & 120.01 \\
+ & & 1b Clique   & 14.68 & 73 & N & 1       & 120.04 \\
+ & & 2 Extended  & 14.68 & 15 & Y & 1       &   0.89 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{(i) LP relaxation values.}
+The natural formulation (1a) and the clique-strengthened formulation (1b) produce
+\emph{identical} root LP values on every instance of Dataset~1 (they differ only at
+the last decimal due to floating-point noise). At first glance this is surprising,
+since the clique inequality strictly dominates the corresponding pairwise edge
+inequalities. The explanation has two parts. First, on these graphs with edge density
+$\sim\!0.5$, the LP optimum is largely determined by the proctor capacity bound
+$\sum_i r_i / R$ together with the symmetry-breaking constraints $y_j \geq y_{j+1}$;
+once the LP saturates these constraints, the additional clique inequalities are not
+active. Second, Gurobi's presolve very likely generates clique cuts from the pairwise
+edge constraints automatically, so writing the cliques explicitly does not add new
+information at the root LP. Formulation~2 is provably at least as tight as
+Formulations 1a and 1b, and we observe \emph{strict} improvement only on the
+smallest, sparsest instances (01--03), where the conflict-graph structure dominates
+over the capacity bound; from instance~04 onward the capacity bound becomes binding
+and all three formulations report the same LP value.
+
+\paragraph{(ii) Branch-and-bound nodes vs.\ solve time.}
+Equal LP relaxation values do \emph{not} imply equal branch-and-bound effort. The clearest
+example is instance~04: all three formulations have LP value $12.84$, but Formulation~2
+closes the gap at the root (1 node, 0.6\,s), Formulation~1b explores
+$\sim\!9\,000$ nodes and times out, and Formulation~1a explores
+$\sim\!2\!\times\!10^5$ nodes (99\,s). The same pattern appears on instances 02, 06,
+and 07. Two factors drive this. (a) The model size differs dramatically: 1b adds one
+constraint per (maximal clique, time slot) pair, which on dense graphs yields many
+thousands of additional rows, making each node LP slower to solve and the
+branching/heuristic stage less effective at finding incumbents. (b) The extended
+formulation has very few variables relative to its information content (each
+$\lambda_S$ encodes an entire feasible slot), so Gurobi's primal heuristics typically
+recover an integer-optimal incumbent immediately at the root. Thus our data suggests
+that LP bound quality is necessary but not sufficient for fast B\&B; the structural
+compactness of the formulation and the difficulty of each individual node LP matter
+just as much. A striking failure mode is visible on instances 09 and 10 of Formulation~1b,
+which return objective values of 75 and 73 respectively---near the trivial
+``one exam per slot'' upper bound of $m = 75$---meaning that within the 120\,s limit
+Gurobi's heuristics could not find a tight feasible solution under this formulation.
+
+\paragraph{(iii) Scaling with instance size.}
+The trend across the ten instances is clear. Formulation~2 (extended) scales the best
+\emph{in solve time}: nine of the ten instances are closed with a single B\&B node,
+and total time stays below $2.5$\,s. The bottleneck of Formulation~2 is purely
+combinatorial enumeration of the feasible groupings, which is still tractable for
+$m \leq 75$ at this density but grows exponentially. Formulations 1a and 1b both
+suffer rapidly increasing node counts as $m$ and $|E|$ grow: the natural formulation
+times out on instances 06 and 10 and the clique formulation times out on instances
+04, 06, 09, and 10. The clique formulation typically explores fewer nodes than the
+natural formulation when both finish (e.g., 1\,524 vs.\ 6\,516 on instance~07), but
+its per-node cost is much higher because of the larger constraint matrix, so its
+wall-clock time is consistently worse on this dataset. In summary, growth rates differ
+substantially: Formulation~2 grows in \emph{enumeration} cost, while Formulations 1a
+and 1b grow in \emph{B\&B} cost, with 1b having the worst wall-clock growth in our
+experiments.
+
+\subsection{Question 3(b): Dataset 2 (time limit 600\,s)}
+
+Dataset 2 contains nine larger instances with $m \in \{80, \ldots, 90\}$ and
+$\lvert E \rvert$ up to $\sim\!2000$. Table~\ref{tab:ds2} reports the results for
+Formulations 1a and 1b. Formulation~2 is omitted because the enumeration of feasible
+groupings is no longer practical at this scale (see discussion below).
+
+\begin{table}[h]
+\centering
+\footnotesize
+\caption{Dataset 2 results (time limit 600\,s).}
+\label{tab:ds2}
+\begin{tabular}{llrrrrcrr}
+\toprule
+Instance & ($m$, $\lvert E\rvert$) & Form. & LP & Obj. & Opt? & Nodes & Time (s) \\
+\midrule
+\multirow{2}{*}{01} & \multirow{2}{*}{(80, 1584)}
+   & 1a Natural & 16.32 & 17 & Y & 1 &  22.26 \\
+ & & 1b Clique  & 16.32 & 17 & Y & 1 & 205.09 \\
+\midrule
+\multirow{2}{*}{02} & \multirow{2}{*}{(82, 1682)}
+   & 1a Natural & 16.08 & 17 & Y & 1 &  15.55 \\
+ & & 1b Clique  & 16.08 & 17 & Y & 1 & 347.32 \\
+\midrule
+\multirow{2}{*}{03} & \multirow{2}{*}{(83, 1726)}
+   & 1a Natural & 16.28 & 17 & Y & 1 &  32.54 \\
+ & & 1b Clique  & 16.28 & 17 & Y & 1 & 355.03 \\
+\midrule
+\multirow{2}{*}{04} & \multirow{2}{*}{(87, 1843)}
+   & 1a Natural & 16.76 & 17 & Y & 9\,995 &  75.71 \\
+ & & 1b Clique  & 16.76 & 17 & Y & 1      & 556.95 \\
+\midrule
+\multirow{2}{*}{05} & \multirow{2}{*}{(87, 1867)}
+   & 1a Natural & 16.60 & 17 & Y & 2\,962 &  64.76 \\
+ & & 1b Clique  & 16.60 & 81 & N & 1      & 600.09 \\
+\midrule
+\multirow{2}{*}{06} & \multirow{2}{*}{(87, 1821)}
+   & 1a Natural & 17.76 & 18 & Y & 3\,434 &  51.99 \\
+ & & 1b Clique  & 17.76 & 18 & N & 216    & 600.14 \\
+\midrule
+\multirow{2}{*}{07} & \multirow{2}{*}{(82, 1660)}
+   & 1a Natural & 16.88 & 17 & Y & 20\,031 &  97.49 \\
+ & & 1b Clique  & 16.88 & 18 & N & 2\,347  & 600.08 \\
+\midrule
+\multirow{2}{*}{08} & \multirow{2}{*}{(85, 1805)}
+   & 1a Natural & 16.84 & 17 & Y & 37\,245 & 214.19 \\
+ & & 1b Clique  & 16.84 & 18 & N & 1       & 600.06 \\
+\midrule
+\multirow{2}{*}{09} & \multirow{2}{*}{(90, 2032)}
+   & 1a Natural & 18.00 & 19 & N & 153\,156 & 600.03 \\
+ & & 1b Clique  & 18.00 & 20 & N & 1        & 600.12 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Comparison and computational limits.}
+The qualitative pattern observed on Dataset~1 is amplified here. The two LP
+relaxations remain identical on every instance, again because the capacity bound and
+the symmetry-breaking constraints dominate the structure of the LP optimum and
+Gurobi's presolve already exploits clique structure internally. In terms of solving the
+ILP, however, Formulation~1a clearly outperforms Formulation~1b: 1a closes eight of
+the nine instances within the time limit (only the largest, instance~09, times out),
+whereas 1b proves optimality on only \emph{four} of the nine. On the remaining five
+instances, 1b often returns notably weaker incumbents (e.g., 81 on instance~05, 20 on
+instance~09 against 1a's 19), reflecting that the heavy constraint matrix slows both
+LP solves at each node and primal heuristics, so the solver cannot find tight integer
+solutions in time.
+This is the same trade-off seen on Dataset~1, scaled up: clique strengthening that
+should in principle help branching becomes counterproductive once the number of maximal
+cliques explodes on dense graphs of this size. Even the natural formulation 1a starts
+to scale poorly: solve time grows from $\sim\!20$\,s at $m = 80$ to over $200$\,s at
+$m = 85$, with $1.5\!\times\!10^5$ nodes explored on the largest instance before
+timing out. Both formulations are therefore approaching their practical limit at
+$m \approx 90$ on graphs of edge density $\sim\!0.5$.
+
+\paragraph{Why the extended formulation is not applicable.}
+The extended formulation has one variable per feasible grouping, where a grouping is
+both an independent set in $G$ and a knapsack-feasible subset under the proctor budget.
+On Dataset~1 (up to $m = 75$) the recursive enumeration in our implementation is still
+feasible. On Dataset~2 the situation changes qualitatively: with $m \approx 90$ and
+edge density $\sim\!0.5$, the conflict graph contains many large independent sets, and
+the proctor capacity $R = 25$ is not tight enough to prune the search aggressively.
+The number of feasible groupings grows exponentially in $m$ on graphs of this density,
+so on these instances it is already astronomically large; even storing the complete
+variable set in memory is impractical, let alone passing it to Gurobi. In other words, the extended formulation trades a polynomial-size model
+(Formulations 1a/1b) for an exponentially large one whose strength comes precisely
+from that exhaustive enumeration; once enumeration is no longer feasible, the
+formulation cannot be built explicitly, which is why Question~3(b) restricts the
+comparison to the two compact formulations.
+
+\end{document}
